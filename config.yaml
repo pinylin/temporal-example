@@ -1,0 +1,13 @@
+workflow:
+  cron-producer: "producer"
+  cron-consumer: "consumer"
+
+temporal:
+  host: "10.96.81.105:7233"
+  taskqueue: "cron"
+
+kafka:
+#  host: "10.96.36.133:9092"
+  host: "124.221.197.151:9092"
+  topic: "topic1"
+  consumer-group: "consumer-group-1"

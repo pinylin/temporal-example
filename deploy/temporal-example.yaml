@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: temporal-example-ss
+spec:
+  serviceName: temporal-example-svc
+  replicas: 5
+  selector:
+    matchLabels:
+      app: temporal-ex
+  template:
+    metadata:
+      labels:
+        app: temporal-ex
+    spec:
+      containers:
+        - name: container
+          image: localhost:5001/temporal-example:v0.0.27
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: IS_MASTER
+              value: "{{ eq .POD_NAME \"temporal-example-ss-0\" }}"

@@ -97,24 +97,28 @@ kubectl apply -f deploy/temporal-example.yaml
 ```
 
 # 思考 
-1. workflow的future状态机，Select IO 超过一秒钟就会panic
-2. 而读取kafka的方法是block直到有数据
+
+- workflow的future状态机，Select IO 超过一秒钟就会panic
+- 而读取kafka的方法是block直到有数据
 
 所以crontab加kafka, 实在是有点不搭, 可行的方法可能是
-    a. cron时间到，parent_workflow 在1s内读取所有能读到的msg
-        ```Go
-            c, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
-            defer cancel()
-            topic := viper.GetString("kafka.topic")
-            kr := lkf.GetKafkaConsumer(&topic)
-            defer kr.Close()
-            var msgList []kafka.Message
-            for {
-                msg, err := kr.ReadMessage(c)
-                if err != nil {
-                    break
-                }
-                msgList = append(msgList, msg)
-            }
-        ```
-    b. 根据上边的msgList启动childWorkflow执行
+    
+1. cron时间到，parent_workflow 在1s内读取所有能读到的msg
+
+```Go
+    c, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
+    defer cancel()
+    topic := viper.GetString("kafka.topic")
+    kr := lkf.GetKafkaConsumer(&topic)
+    defer kr.Close()
+    var msgList []kafka.Message
+    for {
+        msg, err := kr.ReadMessage(c)
+        if err != nil {
+            break
+        }
+        msgList = append(msgList, msg)
+    }
+```
+
+2. 根据上边的msgList启动childWorkflow执行

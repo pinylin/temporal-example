@@ -98,7 +98,7 @@ kubectl apply -f deploy/temporal-example.yaml
 
 # 思考 
 
-- workflow的future状态机，Select IO 超过一秒钟就会panic
+- workflow的future状态机，Select channel 超过一秒钟就会panic
 - 而读取kafka的方法是block直到有数据
 
 所以crontab加kafka, 实在是有点不搭, 可行的方法可能是

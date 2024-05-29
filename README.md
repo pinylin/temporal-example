@@ -87,8 +87,6 @@ kubectl run kafka-producer -ti \
       value: "{{ eq .POD_NAME \"temporal-example-ss-0\" }}"
 ```
 
-3. "Error":"unable to find workflow type: CronConsumerWorkflow. Supported types: [CronProducerWorkflow, ChildCronProducerWorkflow]"}
-
 # todo
 - [ ] helm 
  helm不熟悉, 而且没有自己的images-registry, 加上helm charts要把temporal, kafka 等依赖都加进去的话, 我现在也不会

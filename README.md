@@ -64,6 +64,9 @@ $ docker push localhost:5001/temporal-example:v0.01
 ```
 1.
 kubectl exec --stdin --tty kafka-controller-0 -- /bin/bash
+/opt/bitnami/kafka/bin/kafka-topics.sh --create --topic topic1 --bootstrap-server kafka:9092 
+echo "topic topic1 was create"
+
 
 2. 还是不行
 kubectl run kafka-producer -ti \

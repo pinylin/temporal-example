@@ -13,6 +13,7 @@ import (
 	//"go.temporal.io/sdk/workflow"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/log"
+
 	//"go.temporal.io/sdk/worker"
 
 	"temporal-exmaple/config"
@@ -41,7 +42,6 @@ func main() {
 
 	config.InitConfig()
 	kafka.InitKafkaProducer()
-	//kafka.CreateTopic()
 	//isMaster := os.Getenv("IS_MASTER")
 	podName := os.Getenv("POD_NAME")
 	isMaster := strings.HasSuffix(podName, "-0")
@@ -49,7 +49,7 @@ func main() {
 	tc := initTemporalClient()
 	if isMaster {
 		slog.Warn("master init...")
-		
+
 		workflow.InitProducerCron(tc)
 		workflow.InitConsumerCron(tc)
 	}

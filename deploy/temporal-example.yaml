@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: container
-          image: localhost:5001/temporal-example:v0.0.27
+          image: localhost:5001/temporal-example:v0.0.9
           env:
             - name: POD_NAME
               valueFrom:

@@ -42,7 +42,7 @@ func InitConsumerCron(tc *client.Client) *client.WorkflowRun {
 func CronConsumerWorkflow(ctx workflow.Context) error {
 	workflow.GetLogger(ctx).Info("Cron workflow started.", "StartTime", workflow.Now(ctx))
 	count := 0
-	var childWorkflows []workflow.Future
+	// var childWorkflows []workflow.Future
 	for {
 		count += 1
 		if count >= 200 {
@@ -67,26 +67,22 @@ func CronConsumerWorkflow(ctx workflow.Context) error {
 
 		ctx = workflow.WithChildOptions(ctx, cwo)
 		//ctx = context.WithValue(ctx, CtxKeyWorkflowID, string(msg.Value))
-		childWorkflows = append(childWorkflows, workflow.ExecuteChildWorkflow(ctx, ChildCronConsumerWorkflow))
+		// childWorkflows = append(childWorkflows, workflow.ExecuteChildWorkflow(ctx, ChildCronConsumerWorkflow))
+		workflow.ExecuteChildWorkflow(ctx, ChildCronConsumerWorkflow)
 	}
 
 	// 等待所有 ChildWorkflow 完成
-	for _, childWorkflow := range childWorkflows {
-		if err := childWorkflow.Get(ctx, nil); err != nil {
-			return err
-		}
-	}
+	// for _, childWorkflow := range childWorkflows {
+	// 	if err := childWorkflow.Get(ctx, nil); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }
 
 func ChildCronConsumerWorkflow(ctx workflow.Context) (*CronResult, error) {
 	workflow.GetLogger(ctx).Info("Cron workflow started.", "StartTime", workflow.Now(ctx))
-
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Second,
-	}
-	ctx1 := workflow.WithActivityOptions(ctx, ao)
 
 	// Start from 0 for first cron job
 	lastRunTime := time.Time{}
@@ -100,29 +96,33 @@ func ChildCronConsumerWorkflow(ctx workflow.Context) (*CronResult, error) {
 	thisRunTime := workflow.Now(ctx)
 	//workflowID := workflow.GetChildWorkflowOptions(ctx).WorkflowID
 
-	c, cancel := context.WithCancel(context.Background())
+	c, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
 	defer cancel()
 	topic := viper.GetString("kafka.topic")
 	kr := lkf.GetKafkaConsumer(&topic)
 	defer kr.Close()
-	for {
-		msg, err := kr.ReadMessage(c)
-		if err != nil {
-			if !strings.HasSuffix(err.Error(), "EOF") {
-				log.Printf("Error while reading message from kafka: %s\n", err)
-				panic(err)
-			} else {
-				break
-			}
+
+	msg, err := kr.ReadMessage(c)
+	if err != nil {
+		if !strings.HasSuffix(err.Error(), "EOF") {
+			log.Printf("Error while reading message from kafka: %s\n", err)
+			// panic(err)
 		}
-		ctx1 = workflow.WithValue(ctx1, CtxKeyWorkflowID, string(msg.Value))
-		err = workflow.ExecuteActivity(ctx1, ConsumeActivityMsg, lastRunTime, thisRunTime).Get(ctx, nil)
-		if err != nil {
-			// Cron job failed
-			// Next cron will still be scheduled by the Server
-			workflow.GetLogger(ctx).Error("Cron job failed.", "Error", err)
-			return nil, err
-		}
+	}
+
+	ao := workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+		ActivityID:          string(msg.Value),
+	}
+	ctx1 := workflow.WithActivityOptions(ctx, ao)
+
+	// ctx1 = workflow.WithValue(ctx1, CtxKeyWorkflowID, string(msg.Value))
+	err = workflow.ExecuteActivity(ctx1, ConsumeActivityMsg, lastRunTime, thisRunTime).Get(ctx, nil)
+	if err != nil {
+		// Cron job failed
+		// Next cron will still be scheduled by the Server
+		workflow.GetLogger(ctx).Error("Cron job failed.", "Error", err)
+		return nil, err
 	}
 
 	return &CronResult{RunTime: thisRunTime}, nil
@@ -131,7 +131,9 @@ func ChildCronConsumerWorkflow(ctx workflow.Context) (*CronResult, error) {
 func ConsumeActivityMsg(ctx context.Context, lastRunTime, thisRunTime time.Time) error {
 	activity.GetLogger(ctx).Info("Cron job running.", "lastRunTime_exclude", lastRunTime, "thisRunTime_include", thisRunTime)
 	// Query database, call external API, or do any other non-deterministic action.
-	workflowID := ctx.Value(CtxKeyWorkflowID).(string)
+	info := activity.GetInfo(ctx)
+	// workflowID := ctx.Value(CtxKeyWorkflowID).(string)
+	workflowID := info.ActivityID
 	slog.Info("Consume Message: %s\n", workflowID)
 
 	return nil
@@ -180,29 +182,25 @@ func ConsumerWorkflow(ctx workflow.Context) (*CronResult, error) {
 	}
 	thisRunTime := workflow.Now(ctx)
 
-	c, cancel := context.WithCancel(context.Background())
+	c, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
 	defer cancel()
 	topic := viper.GetString("kafka.topic")
 	kr := lkf.GetKafkaConsumer(&topic)
 	defer kr.Close()
-	for {
-		msg, err := kr.ReadMessage(c)
-		if err != nil {
-			if !strings.HasSuffix(err.Error(),"EOF") {
-				log.Printf("Error while reading message from kafka: %s\n", err)
-				panic(err)
-			} else {
-				break
-			}
+	msg, err := kr.ReadMessage(c)
+	if err != nil {
+		if !strings.HasSuffix(err.Error(), "EOF") {
+			log.Printf("Error while reading message from kafka: %s\n", err)
+			// panic(err)
 		}
-		ctx1 = workflow.WithValue(ctx1, CtxKeyWorkflowID, string(msg.Value))
-		err = workflow.ExecuteActivity(ctx1, ConsumeActivityMsg, lastRunTime, thisRunTime).Get(ctx, nil)
-		if err != nil {
-			// Cron job failed
-			// Next cron will still be scheduled by the Server
-			workflow.GetLogger(ctx).Error("Cron job failed.", "Error", err)
-			return nil, err
-		}
+	}
+	ctx1 = workflow.WithValue(ctx1, CtxKeyWorkflowID, string(msg.Value))
+	err = workflow.ExecuteActivity(ctx1, ConsumeActivityMsg, lastRunTime, thisRunTime).Get(ctx, nil)
+	if err != nil {
+		// Cron job failed
+		// Next cron will still be scheduled by the Server
+		workflow.GetLogger(ctx).Error("Cron job failed.", "Error", err)
+		return nil, err
 	}
 
 	return &CronResult{RunTime: thisRunTime}, nil

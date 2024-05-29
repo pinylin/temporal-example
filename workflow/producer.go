@@ -40,7 +40,7 @@ func InitProducerCron(tc *client.Client) *client.WorkflowRun {
 func CronProducerWorkflow(ctx workflow.Context) error {
 	workflow.GetLogger(ctx).Info("Cron workflow started.", "StartTime", workflow.Now(ctx))
 
-	var childWorkflows []workflow.Future
+	// var childWorkflows []workflow.Future
 	for i := 0; i < 200; i++ {
 		execution := workflow.GetInfo(ctx).WorkflowExecution
 		childID := fmt.Sprintf("child_workflow:%v", execution.RunID)
@@ -48,49 +48,34 @@ func CronProducerWorkflow(ctx workflow.Context) error {
 			WorkflowID: childID,
 		}
 		ctx = workflow.WithChildOptions(ctx, cwo)
-		childWorkflows = append(childWorkflows, workflow.ExecuteChildWorkflow(ctx, ChildCronProducerWorkflow))
+		// childWorkflows = append(childWorkflows, workflow.ExecuteChildWorkflow(ctx, ChildCronProducerWorkflow))
+		workflow.ExecuteChildWorkflow(ctx, ChildCronProducerWorkflow)
 	}
 
 	// 等待所有 ChildWorkflow 完成
-	for _, childWorkflow := range childWorkflows {
-		if err := childWorkflow.Get(ctx, nil); err != nil {
-			return err
-		}
-	}
+	// for _, childWorkflow := range childWorkflows {
+	// 	if err := childWorkflow.Get(ctx, nil); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }
 
-func ChildCronProducerWorkflow(ctx workflow.Context) (*CronResult, error) {
-	workflow.GetLogger(ctx).Info("Cron workflow started.", "StartTime", workflow.Now(ctx))
-
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Second,
+func ChildCronProducerWorkflow(ctx workflow.Context) error {
+	//workflowID := ctx.Value(CtxKeyWorkflowID).(string)
+	workflowID := "cron_" + uuid.New()
+	kw := lkf.NewKafkaWriter()
+	defer kw.Close()
+	msg := kafka.Message{
+		Key:   []byte(fmt.Sprintf("workflowID-%s", workflowID)),
+		Value: []byte(workflowID),
 	}
-	ctx1 := workflow.WithActivityOptions(ctx, ao)
-
-	// Start from 0 for first cron job
-	lastRunTime := time.Time{}
-	// Check to see if there was a previous cron job
-	if workflow.HasLastCompletionResult(ctx) {
-		var lastResult CronResult
-		if err := workflow.GetLastCompletionResult(ctx, &lastResult); err == nil {
-			lastRunTime = lastResult.RunTime
-		}
-	}
-	thisRunTime := workflow.Now(ctx)
-
-	//workflowID := "cron_" + uuid.New()
-	//ctx1 = workflow.WithValue(ctx1, CtxKeyWorkflowID, workflowID)
-	err := workflow.ExecuteActivity(ctx1, PushActivityMsg, lastRunTime, thisRunTime).Get(ctx, nil)
+	err := kw.WriteMessages(context.Background(), msg)
 	if err != nil {
-		// Cron job failed
-		// Next cron will still be scheduled by the Server
-		workflow.GetLogger(ctx).Error("Cron job failed.", "Error", err)
-		return nil, err
+		slog.Error(err.Error())
 	}
-
-	return &CronResult{RunTime: thisRunTime}, nil
+	return err
 }
 
 func PushActivityMsg(ctx context.Context, lastRunTime, thisRunTime time.Time) error {
